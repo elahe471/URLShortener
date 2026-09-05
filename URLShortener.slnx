@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/Src/">
+    <Project Path="Src/Shortener.API/Shortener.API.csproj" Id="bdbb94d6-6235-4afd-82fa-381fdb365f04" />
+  </Folder>
+</Solution>
