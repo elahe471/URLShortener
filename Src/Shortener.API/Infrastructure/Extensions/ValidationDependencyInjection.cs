@@ -1,5 +1,4 @@
-﻿using FluentValidation;
-using Shortener.API.Validators;
+﻿
 
 namespace Shortener.API.Infrastructure.Extensions
 {

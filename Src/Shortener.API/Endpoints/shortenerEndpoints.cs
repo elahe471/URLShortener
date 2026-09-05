@@ -12,7 +12,7 @@ namespace Shortener.API.Endpoints
             return app;
         }
 
-        public static async Task<IResult> CreateShortUrl(ShortenUrlRequest request, IValidator<ShortenUrlRequest> validator,
+        public static async Task<IResult> CreateShortUrl(ShortenUrlRequest request, IValidator<ShortenUrlRequest> validator,IShortenService shortenService,
         CancellationToken cancellationToken)
         {
             //URL Validation
@@ -29,7 +29,9 @@ namespace Shortener.API.Endpoints
                             x => x.Select(e => e.ErrorMessage).ToArray()));
             }
 
-            return Results.Ok();
+            var shortUrl = await shortenService.ShortenUrlAsync(request.LongUrl, cancellationToken);
+
+            return Results.Ok(shortUrl);
         }
     }
 }
