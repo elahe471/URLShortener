@@ -1,15 +1,13 @@
-﻿using FluentValidation;
-using Shortener.API.Endpoints.Contracts;
+﻿
 
-namespace Shortener.API.Validators;
-
-public sealed class ShortenUrlRequestValidator : AbstractValidator<ShortenUrlRequest>
+public sealed class ShortenUrlRequestValidator
+    : AbstractValidator<ShortenUrlRequest>
 {
     private const int MaxUrlLength = 4096;
 
     public ShortenUrlRequestValidator()
     {
-        RuleFor(x => x.LongURL)
+        RuleFor(x => x.LongUrl)
             .NotEmpty()
             .WithMessage("URL is required.")
 
@@ -25,7 +23,16 @@ public sealed class ShortenUrlRequestValidator : AbstractValidator<ShortenUrlReq
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return false;
 
-        return uri.Scheme == Uri.UriSchemeHttp ||
-               uri.Scheme == Uri.UriSchemeHttps;
+        if (uri.Scheme != Uri.UriSchemeHttp &&
+            uri.Scheme != Uri.UriSchemeHttps)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(uri.Host))
+            return false;
+
+        if (url.Any(char.IsControl))
+            return false;
+
+        return true;
     }
 }

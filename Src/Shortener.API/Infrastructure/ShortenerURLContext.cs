@@ -1,6 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
-using MongoDB.EntityFrameworkCore.Extensions;
-using Shortener.API.Models;
+﻿
 
 namespace Shortener.API.Infrastructure
 {

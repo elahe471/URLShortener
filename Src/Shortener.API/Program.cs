@@ -1,5 +1,4 @@
-using Shortener.API.Endpoints;
-using Shortener.API.Infrastructure.Extensions;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
