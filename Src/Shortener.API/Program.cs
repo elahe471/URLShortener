@@ -2,6 +2,8 @@
 
 
 
+using Shortener.API.Exceptions;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -11,7 +13,10 @@ builder.Services.AddOpenApi();
 builder.AddApplicationServices();
 builder.AddApplicationValidation();
 builder.AddMongoApplicationServices();
+builder.Services.AddProblemDetails();
 
+builder.Services.AddExceptionHandler<
+    GlobalExceptionHandler>();
 
 
 var app = builder.Build();
@@ -24,19 +29,19 @@ using (var scope = app.Services.CreateScope())
     await context.Database.EnsureCreatedAsync();
 }
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
+
     app.MapOpenApi();
     app.MapScalarApiReference();
-}
 
-app.UseHttpsRedirection();
+app.UseExceptionHandler();
+//app.UseHttpsRedirection();
 
 var shortenerGroup = app.MapGroup("/api/v1/shortener")
     .WithTags("Shortener APIs");
 
 shortenerGroup.MapShortenerEndpoints();
+
+app.MapRedirectEndpoints();
 
 app.Run();
 

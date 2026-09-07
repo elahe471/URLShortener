@@ -20,10 +20,10 @@ public static class MongoDependencyInjection
 
         //mongo-driver
         var mongoConnectionString =
-builder.Configuration
-    .GetConnectionString("ShortenerURLContext")
-?? throw new InvalidOperationException(
-    "MongoDB connection string not found.");
+        builder.Configuration
+        .GetConnectionString("ShortenerURLContext")
+        ?? throw new InvalidOperationException(
+        "MongoDB connection string not found.");
 
         var mongoUrl =
             new MongoUrl(mongoConnectionString);

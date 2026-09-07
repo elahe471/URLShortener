@@ -1,29 +1,32 @@
-﻿
-namespace Shortener.API.Services;
+﻿namespace Shortener.API.Services;
 
-public class ShortenService(
+public sealed class ShortenService(
     ShortenerURLContext context,
     ISequenceGenerator sequenceGenerator,
     IShortCodeGenerator shortCodeGenerator,
-    IOptions<ShortenerSettings> options)
+    IOptions<ShortenerSettings> options,
+    TimeProvider timeProvider)
     : IShortenService
 {
     private readonly ShortenerURLContext _context = context;
-    private readonly IOptions<ShortenerSettings> _settings = options        ;
-
+    private readonly ISequenceGenerator _sequenceGenerator = sequenceGenerator;
+    private readonly IShortCodeGenerator _shortCodeGenerator = shortCodeGenerator;
+    private readonly ShortenerSettings _settings = options.Value;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     public async Task<string> ShortenUrlAsync(
         string longUrl,
         CancellationToken cancellationToken)
     {
         var sequence =
-         await sequenceGenerator.GetNextAsync(
-             cancellationToken);
+            await _sequenceGenerator.GetNextAsync(
+                cancellationToken);
 
         var shortenedCode =
-            shortCodeGenerator.Generate(sequence);
+            _shortCodeGenerator.Generate(sequence);
 
-        var now = DateTime.UtcNow;
+        var now =
+            _timeProvider.GetUtcNow().UtcDateTime;
 
         var urlTag = new UrlTag
         {
@@ -31,7 +34,7 @@ public class ShortenService(
             DestinationURL = longUrl,
             CreatedOn = now,
             ExpirationDate = now.AddDays(
-                _settings.Value.ExpireDateScopeInDays)
+                _settings.ExpireDateScopeInDays)
         };
 
         _context.UrlTags.Add(urlTag);
@@ -39,7 +42,12 @@ public class ShortenService(
         await _context.SaveChangesAsync(
             cancellationToken);
 
-        return shortenedCode;
+        return GetShortenedUrl(shortenedCode);
     }
 
+    private string GetShortenedUrl(
+        string shortenedCode)
+    {
+        return $"{_settings.BaseUrl.TrimEnd('/')}/{shortenedCode}";
+    }
 }

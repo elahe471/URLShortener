@@ -1,6 +1,4 @@
-﻿
-
-namespace Shortener.API.Services;
+﻿namespace Shortener.API.Services;
 
 public sealed class ShortCodeGenerator
     : IShortCodeGenerator
@@ -9,8 +7,8 @@ public sealed class ShortCodeGenerator
         "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     private const int Rounds = 8;
-
     private const int HalfBits = 26;
+    private const int ShortCodeLength = 9;
 
     private const ulong HalfMask =
         (1UL << HalfBits) - 1;
@@ -18,23 +16,14 @@ public sealed class ShortCodeGenerator
     private const ulong MaxSequence =
         (1UL << 52) - 1;
 
-    private const int ShortCodeLength = 9;
-
     private readonly byte[] _secretKey;
 
     public ShortCodeGenerator(
         IOptions<ShortenerSettings> options)
     {
-        var settings = options.Value;
-
-        if (string.IsNullOrWhiteSpace(settings.SecretKey))
-        {
-            throw new InvalidOperationException(
-                "Shortener secret key is not configured.");
-        }
-
         _secretKey =
-            Encoding.UTF8.GetBytes(settings.SecretKey);
+            Convert.FromBase64String(
+                options.Value.SecretKey);
     }
 
     public string Generate(long sequence)
@@ -61,14 +50,14 @@ public sealed class ShortCodeGenerator
 
     private ulong Permute(ulong value)
     {
-        // Split the 52-bit number into two 26-bit halves.
+        // Split the 52-bit value into two 26-bit halves.
         ulong left =
             (value >> HalfBits) & HalfMask;
 
         ulong right =
             value & HalfMask;
 
-        // Feistel Network
+        // Apply the Feistel permutation.
         for (byte round = 0; round < Rounds; round++)
         {
             var nextLeft = right;
@@ -81,7 +70,7 @@ public sealed class ShortCodeGenerator
             right = nextRight;
         }
 
-        // Merge the two 26-bit halves back into a 52-bit number.
+        // Merge the two halves back into a 52-bit value.
         return (left << HalfBits) | right;
     }
 

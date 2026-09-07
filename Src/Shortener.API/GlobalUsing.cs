@@ -7,6 +7,8 @@ global using Shortener.API.Services;
 global using Shortener.API.Services.Interface;
 global using Shortener.API.Models;
 global using Shortener.API.Infrastructure.Configurations;
+global using Shortener.API.Errors;
+global using Shortener.API.Exceptions;
 
 
 //Nuget Packages
@@ -21,3 +23,6 @@ global using Microsoft.Extensions.Options;
 global using System.Buffers.Binary;
 global using System.Security.Cryptography;
 global using System.Text;
+global using System.Collections.Frozen;
+global using Microsoft.AspNetCore.Diagnostics;
+global using Microsoft.AspNetCore.Mvc;
