@@ -5,5 +5,7 @@
         public const string SectionName = "ShortenerSettings";
 
         public int ExpireDateScopeInDays { get; set; }
+
+        public string SecretKey { get; set; } = string.Empty;
     }
 }

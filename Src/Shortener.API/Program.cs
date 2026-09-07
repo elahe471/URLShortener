@@ -10,6 +10,7 @@ builder.Services.AddOpenApi();
 
 builder.AddApplicationServices();
 builder.AddApplicationValidation();
+builder.AddMongoApplicationServices();
 
 
 

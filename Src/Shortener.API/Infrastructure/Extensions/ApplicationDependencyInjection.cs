@@ -6,23 +6,21 @@ namespace Shortener.API.Infrastructure.Extensions
     {
         public static void AddApplicationServices(this IHostApplicationBuilder builder)
         {
-            builder.Services.AddDbContext<ShortenerURLContext>(options =>
-        options.UseMongoDB(
-            builder.Configuration.GetConnectionString("ShortenerURLContext") ??
-            throw new InvalidOperationException(
-                "Connection string 'ShortenerURLContext' not found.")));
-
-
 
             builder.Services
-           .AddOptions<ShortenerSettings>()
-           .Bind(builder.Configuration.GetSection(
-               ShortenerSettings.SectionName))
-           .Validate(
-               x => x.ExpireDateScopeInDays > 0,
-               "ExpireDateScopeInDays must be greater than zero.")
-           .ValidateOnStart();
-
+         .AddOptions<ShortenerSettings>()
+         .Bind(builder.Configuration.GetSection(
+             ShortenerSettings.SectionName))
+         .Validate(
+             x => x.ExpireDateScopeInDays > 0,
+             "ExpireDateScopeInDays must be greater than zero.")
+         .Validate(
+             x => !string.IsNullOrWhiteSpace(x.SecretKey),
+             "SecretKey is required.")
+         .Validate(
+             x => Encoding.UTF8.GetByteCount(x.SecretKey) >= 32,
+             "SecretKey must be at least 32 bytes.")
+         .ValidateOnStart();
 
 
             builder.Services.AddScoped<IShortenService, ShortenService>();
