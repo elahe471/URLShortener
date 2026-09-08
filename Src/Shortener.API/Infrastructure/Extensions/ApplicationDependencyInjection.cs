@@ -34,11 +34,14 @@ namespace Shortener.API.Infrastructure.Extensions
             "SecretKey must be a valid Base64 value containing at least 32 bytes.")
         .ValidateOnStart();
 
-            //instead of using DateTime.Now, we can use TimeProvider.System to get the current time, this will make it easier to test the code in the future
-            builder.Services.AddSingleton(TimeProvider.System);
+           
 
             builder.Services.AddScoped<IShortenService, ShortenService>();
             builder.Services.AddScoped<IRedirectService, RedirectService>();
+
+            //instead of using DateTime.Now, we can use TimeProvider.System to get the current time, this will make it easier to test the code in the future
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.AddSingleton<ErrorTranslator>();
 
         }
     }

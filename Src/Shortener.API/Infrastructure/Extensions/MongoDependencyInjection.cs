@@ -12,40 +12,27 @@ public static class MongoDependencyInjection
 
 
         builder.Services.AddDbContext<ShortenerURLContext>(options =>
-    options.UseMongoDB(
-        builder.Configuration.GetConnectionString("ShortenerURLContext") ??
-        throw new InvalidOperationException(
-            "Connection string 'ShortenerURLContext' not found.")));
+            options.UseMongoDB(builder.Configuration.GetConnectionString("ShortenerURLContext") 
+            ?? throw new InvalidOperationException("Connection string 'ShortenerURLContext' not found.")));
 
 
         //mongo-driver
-        var mongoConnectionString =
-        builder.Configuration
-        .GetConnectionString("ShortenerURLContext")
-        ?? throw new InvalidOperationException(
-        "MongoDB connection string not found.");
+        var mongoConnectionString = builder.Configuration.GetConnectionString("ShortenerURLContext")
+            ?? throw new InvalidOperationException("MongoDB connection string not found.");
 
-        var mongoUrl =
-            new MongoUrl(mongoConnectionString);
+        var mongoUrl = MongoUrl.Create(mongoConnectionString);
 
-        builder.Services.AddSingleton<IMongoClient>(
-    new MongoClient(mongoConnectionString));
+        // Singleton: MongoClient is thread-safe and manages connection pooling internally.
+        builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoUrl));
 
-        builder.Services.AddSingleton(sp =>
+        //Singleton because it is thread-safe, lightweight, and reuses the shared client.
+        builder.Services.AddSingleton<IMongoDatabase>(sp =>
         {
-            var client =
-                sp.GetRequiredService<IMongoClient>();
-
-            return client.GetDatabase(
-                mongoUrl.DatabaseName);
+            var client = sp.GetRequiredService<IMongoClient>();
+            return client.GetDatabase(mongoUrl.DatabaseName);
         });
 
-        builder.Services.AddSingleton<
-            ISequenceGenerator,
-            MongoSequenceGenerator>();
-
-        builder.Services.AddSingleton<
-            IShortCodeGenerator,
-            ShortCodeGenerator>();
+        builder.Services.AddSingleton<ISequenceGenerator, MongoSequenceGenerator>();
+        builder.Services.AddSingleton<IShortCodeGenerator,ShortCodeGenerator>();
     }
 }

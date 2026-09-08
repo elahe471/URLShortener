@@ -2,4 +2,7 @@
   <Folder Name="/Src/">
     <Project Path="Src/Shortener.API/Shortener.API.csproj" Id="bdbb94d6-6235-4afd-82fa-381fdb365f04" />
   </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Shortener.UnitTests/Shortener.UnitTests.csproj" Id="85c7aada-9798-42e3-8db9-9fccee965c4c" />
+  </Folder>
 </Solution>
