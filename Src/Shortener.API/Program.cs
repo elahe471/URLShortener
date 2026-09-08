@@ -10,9 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+
 builder.AddApplicationServices();
 builder.AddApplicationValidation();
-builder.AddMongoApplicationServices();
+builder.AddMongoDb();
+builder.AddRedisCache();
+
 builder.Services.AddProblemDetails();
 
 builder.Services.AddExceptionHandler<

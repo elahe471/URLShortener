@@ -2,7 +2,7 @@
 
 public static class MongoDependencyInjection
 {
-    public static void AddMongoApplicationServices(this IHostApplicationBuilder builder)
+    public static void AddMongoDb(this IHostApplicationBuilder builder)
     {
 
         // EF Core is used for regular persistence operations on UrlTags,
