@@ -1,8 +1,8 @@
 # URL Shortener
 
-A production-oriented URL Shortener API built with **.NET Minimal API** and **MongoDB**.
+A production-oriented URL Shortener API built with **.NET Minimal API**, **MongoDB**, and **HybridCache**.
 
-The project is being developed as a practical system-design exercise, with focus on clean architecture, MongoDB concepts, secure short-code generation, centralized error handling, configuration management, and unit testing.
+The project is being developed as a practical system-design exercise, with focus on clean architecture, MongoDB concepts, secure short-code generation, centralized error handling, configuration management, caching, and unit testing.
 
 ## Current Features
 
@@ -15,6 +15,8 @@ The project is being developed as a practical system-design exercise, with focus
 - Unique and query indexes
 - Atomic sequence generation with MongoDB
 - Non-sequential, hard-to-guess short codes
+- Hybrid caching with in-memory cache and Redis
+- Configurable cache enable/disable switch
 - Centralized error handling with Problem Details
 - Unit tests for short-code generation
 
@@ -25,6 +27,8 @@ The project is being developed as a practical system-design exercise, with focus
 - MongoDB
 - MongoDB Entity Framework Core Provider
 - MongoDB .NET Driver
+- Microsoft.Extensions.Caching.Hybrid
+- StackExchange.Redis / Distributed Cache
 - FluentValidation
 - xUnit
 - FluentAssertions
@@ -197,20 +201,147 @@ ExpirationDate
 
 The unique index on `ShortenedCode` remains as the final database-level safety guarantee even though the generation algorithm is designed to preserve uniqueness.
 
+## Hybrid Cache
+
+The redirect flow uses ASP.NET Core `HybridCache`.
+
+HybridCache combines two cache layers:
+
+```text
+L1 → In-memory cache
+L2 → Redis distributed cache
+```
+
+The lookup flow is:
+
+```text
+Request
+  ↓
+L1 Memory Cache
+  ↓ miss
+L2 Redis
+  ↓ miss
+MongoDB
+  ↓
+Populate Redis + Memory
+  ↓
+Return
+```
+
+This design reduces MongoDB reads for frequently accessed short URLs while keeping redirect resolution fast.
+
+HybridCache also provides stampede protection for concurrent requests targeting the same cache key within the same application instance. When multiple requests miss the cache at the same time, the underlying factory is coordinated so the database does not need to be queried repeatedly for the same key.
+
+### Redirect Cache Key
+
+Redirect entries use a short namespace prefix:
+
+```text
+r:{shortCode}
+```
+
+Example:
+
+```text
+r:0aK91PxQz
+```
+
+The prefix helps avoid collisions with other cache entry types if more caching scenarios are added later.
+
+### Redirect Cache Item
+
+Only the fields required for redirect resolution are stored in the cache:
+
+```csharp
+public sealed record RedirectCacheItem(
+    string DestinationURL,
+    DateTime ExpirationDate);
+```
+
+This allows the application to validate the URL expiration date even when the result is returned from memory or Redis.
+
+### Cache Configuration
+
+Caching can be enabled or disabled through `CacheSettings`.
+
+Example configuration:
+
+```json
+{
+  "Cache": {
+    "UseCache": true,
+    "ExpirationInMinutes": 30,
+    "LocalCacheExpirationInMinutes": 5
+  }
+}
+```
+
+Current cache settings:
+
+```text
+UseCache
+→ Enables or disables the cache path.
+
+ExpirationInMinutes
+→ Controls the distributed Redis cache lifetime.
+
+LocalCacheExpirationInMinutes
+→ Controls the in-process memory cache lifetime.
+```
+
+Typical flow:
+
+```text
+L1 Memory → 5 minutes
+L2 Redis  → 30 minutes
+```
+
+If caching is disabled, the redirect service reads directly from MongoDB.
+
+```text
+UseCache = false
+        ↓
+MongoDB
+```
+
+### Expiration Safety
+
+The URL's actual `ExpirationDate` is checked after the value is resolved, regardless of whether it came from:
+
+```text
+Memory
+Redis
+MongoDB
+```
+
+This ensures an expired URL is never redirected even if a cache entry still exists.
+
 ## Configuration
 
-The project uses the ASP.NET Core Options pattern:
+The project uses ASP.NET Core configuration and the Options pattern for application settings.
+
+### Shortener Settings
 
 ```csharp
 IOptions<ShortenerSettings>
 ```
 
-Current settings include:
+Current shortener settings include:
 
 ```text
 BaseUrl
 ExpireDateScopeInDays
 SecretKey
+```
+
+### Cache Settings
+
+Cache behavior is configured independently:
+
+```text
+UseCache
+ExpirationInMinutes
+LocalCacheExpirationInMinutes
 ```
 
 ### Development
@@ -222,6 +353,14 @@ appsettings.Development.json
 ```
 
 Sensitive values are stored with User Secrets.
+
+Examples:
+
+```text
+ShortenerSettings:SecretKey
+ConnectionStrings:ShortenerURLContext
+ConnectionStrings:Redis
+```
 
 ### Production
 
@@ -238,6 +377,7 @@ Example environment variable format:
 ```text
 ShortenerSettings__SecretKey
 ConnectionStrings__ShortenerURLContext
+ConnectionStrings__Redis
 ```
 
 ## Error Handling
@@ -305,6 +445,24 @@ ExpirationDate
 
 This avoids loading the entire MongoDB document for every redirect request.
 
+With caching enabled, redirect resolution follows this path:
+
+```text
+Short Code
+    ↓
+HybridCache
+    ↓
+Memory
+    ↓ miss
+Redis
+    ↓ miss
+MongoDB
+    ↓
+Expiration Check
+    ↓
+302 Redirect
+```
+
 Current redirect behavior:
 
 ```text
@@ -356,6 +514,12 @@ Example test naming convention:
 MethodName_Scenario_ExpectedResult
 ```
 
+Example:
+
+```csharp
+Generate_WithInvalidSequence_ShouldThrow()
+```
+
 The tests follow the AAA pattern:
 
 ```text
@@ -370,7 +534,7 @@ Pure application logic is covered by Unit Tests.
 
 MongoDB atomic behavior should be covered by Integration Tests rather than mocked Unit Tests.
 
-Planned integration test example:
+Planned MongoDB integration test:
 
 ```text
 100 concurrent requests
@@ -382,17 +546,55 @@ MongoDB atomic $inc
 
 A future integration-test project can use a real MongoDB container through Testcontainers.
 
+### HybridCache Verification
+
+The current HybridCache flow has been manually verified for the main cache paths:
+
+```text
+Cold Cache
+→ Memory miss
+→ Redis miss
+→ MongoDB
+
+Second Request
+→ Memory hit
+
+Application Restart
+→ Memory cleared
+→ Redis hit
+
+UseCache = false
+→ MongoDB directly
+```
+
+This confirms the intended L1/L2/fallback behavior of the redirect path.
+
 ## Current Project Direction
 
 The project is intentionally being kept simple at the API level while exploring deeper system-design concepts where they provide real value.
 
+Current focus areas include:
+
+```text
+URL validation
+MongoDB
+Atomic ID generation
+Feistel permutation
+Base62 encoding
+Centralized error handling
+Environment configuration
+Hybrid caching
+Unit testing
+```
+
 Future areas may include:
 
 - integration tests with MongoDB
+- integration tests for cache behavior
 - redirect analytics
 - click tracking
 - rate limiting
-- caching
+- cache invalidation strategy
 - cleanup of expired URLs
 - distributed ID-generation strategies
 - observability and metrics
