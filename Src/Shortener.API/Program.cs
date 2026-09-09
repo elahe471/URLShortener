@@ -14,7 +14,7 @@ builder.Services.AddOpenApi();
 builder.AddApplicationServices();
 builder.AddApplicationValidation();
 builder.AddMongoDb();
-builder.AddRedisCache();
+builder.AddCache();
 
 builder.Services.AddProblemDetails();
 
