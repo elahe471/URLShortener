@@ -15,8 +15,9 @@ public sealed class ShortenService(
     private readonly TimeProvider _timeProvider = timeProvider;
 
     public async Task<string> ShortenUrlAsync(
-        string longUrl,
-        CancellationToken cancellationToken)
+      string longUrl,
+      DateTimeOffset expirationDate,
+      CancellationToken cancellationToken)
     {
         var sequence =
             await _sequenceGenerator.GetNextAsync(
@@ -33,8 +34,7 @@ public sealed class ShortenService(
             ShortenedCode = shortenedCode,
             DestinationURL = longUrl,
             CreatedOn = now,
-            ExpirationDate = now.AddDays(
-                _settings.ExpireDateScopeInDays)
+            ExpirationDate = expirationDate.UtcDateTime
         };
 
         _context.UrlTags.Add(urlTag);

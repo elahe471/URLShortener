@@ -3,7 +3,8 @@
     public interface IShortenService
     {
         Task<string> ShortenUrlAsync(
-        string longUrl,
-        CancellationToken cancellationToken);
+         string longUrl,
+         DateTimeOffset expirationDate,
+         CancellationToken cancellationToken);
     }
 }

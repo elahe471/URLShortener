@@ -12,9 +12,6 @@ namespace Shortener.API.Infrastructure.Extensions
         .Bind(builder.Configuration.GetSection(
             ShortenerSettings.SectionName))
         .Validate(
-            x => x.ExpireDateScopeInDays > 0,
-            "ExpireDateScopeInDays must be greater than zero.")
-        .Validate(
             x => !string.IsNullOrWhiteSpace(x.SecretKey),
             "SecretKey is required.")
         .Validate(

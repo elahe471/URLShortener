@@ -43,9 +43,10 @@ public static class ShortenerEndpoints
         }
 
         var shortUrl =
-            await shortenService.ShortenUrlAsync(
-                request.LongUrl,
-                cancellationToken);
+      await shortenService.ShortenUrlAsync(
+          request.LongUrl,
+          request.ExpirationDate,
+          cancellationToken);
 
         return Results.Ok(shortUrl);
     }

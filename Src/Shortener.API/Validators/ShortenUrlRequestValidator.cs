@@ -5,7 +5,7 @@ public sealed class ShortenUrlRequestValidator
 {
     private const int MaxUrlLength = 4096;
 
-    public ShortenUrlRequestValidator()
+    public ShortenUrlRequestValidator(TimeProvider timeProvider)
     {
         RuleFor(x => x.LongUrl)
             .NotEmpty()
@@ -16,6 +16,12 @@ public sealed class ShortenUrlRequestValidator
 
             .Must(BeValidUrl)
             .WithMessage("URL must be a valid absolute HTTP or HTTPS URL.");
+
+        RuleFor(x => x.ExpirationDate)
+           .Must(expirationDate =>
+               expirationDate > timeProvider.GetUtcNow())
+           .WithMessage(
+               "ExpirationDate must be in the future.");
     }
 
     private static bool BeValidUrl(string url)

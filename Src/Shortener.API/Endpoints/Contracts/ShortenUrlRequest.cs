@@ -1,3 +1,5 @@
 ﻿namespace Shortener.API.Endpoints.Contracts;
 
-public sealed record ShortenUrlRequest(string LongUrl);
+public sealed record ShortenUrlRequest(
+    string LongUrl,
+    DateTimeOffset ExpirationDate);
