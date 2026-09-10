@@ -22,7 +22,6 @@ public class ShortCodeGeneratorTests
         var settings = new ShortenerSettings
         {
             SecretKey = Convert.ToBase64String(secretBytes),
-            ExpireDateScopeInDays = 30,
             BaseUrl = "https://localhost"
         };
 
