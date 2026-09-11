@@ -382,6 +382,33 @@ canceled
 
 The project intentionally avoids using `shortCode` as a Prometheus label to prevent high-cardinality metrics.
 
+### Observability Dashboard
+
+<p align="center">
+  <img src="docs/images/grafana-dashboard.png"
+       alt="URL Shortener Grafana Dashboard"
+       width="900">
+</p>
+
+<p align="center">
+  <em>Business and technical metrics visualized with Prometheus and Grafana.</em>
+</p>
+
+The dashboard includes both application-level and business-level metrics, such as:
+
+- request duration
+- error rate
+- total requests
+- current connections
+- top requested endpoints
+- total links created
+- total redirects
+- redirect results
+- successful redirect rate
+- average redirect duration
+- P95 redirect duration
+- database fallback usage
+
 ## Prometheus
 
 Prometheus runs as shared Docker infrastructure and can monitor multiple applications.
@@ -415,13 +442,17 @@ Grafana runs in Docker and uses Prometheus as its data source:
 http://prometheus:9090
 ```
 
-Current experiments include visualizing:
+The Grafana dashboard combines:
 
-- total created links
-- redirect counts
-- redirect results
-- redirect duration
-- database fallback metrics
+```text
+Technical Metrics
+→ ASP.NET Core instrumentation
+
+Business Metrics
+→ Custom Shortener metrics
+```
+
+This provides both infrastructure-level visibility and application-specific insight.
 
 ## Time Handling
 

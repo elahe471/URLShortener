@@ -21,6 +21,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOpenTelemetry().WithMetrics(builder =>{
     builder.AddPrometheusExporter();
+    builder.AddAspNetCoreInstrumentation();
     builder.AddMeter([ShortDiagnostic.MeterName]);
 });
 

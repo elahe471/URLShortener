@@ -5,18 +5,10 @@ namespace Shortener.API.Observability;
 public sealed class ShortDiagnostic
 {
     public const string MeterName = "Shortener.API";
-
-    public const string LinksCreatedMetricName =
-        "shortener.links.created";
-
-    public const string RedirectsMetricName =
-        "shortener.redirects";
-
-    public const string RedirectDurationMetricName =
-        "shortener.redirect.duration";
-
-    public const string CacheDatabaseFallbackMetricName =
-        "shortener.cache.database_fallback";
+    public const string LinksCreatedMetricName ="shortener.links.created";
+    public const string RedirectsMetricName ="shortener.redirects";
+    public const string RedirectDurationMetricName ="shortener.redirect.duration";
+    public const string CacheDatabaseFallbackMetricName ="shortener.cache.database_fallback";
 
     private readonly Counter<long> _linksCreatedCounter;
     private readonly Counter<long> _redirectCounter;
