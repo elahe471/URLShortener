@@ -2,7 +2,8 @@
 
 
 
-using Shortener.API.Exceptions;
+
+using Shortener.API.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,11 +16,13 @@ builder.AddApplicationServices();
 builder.AddApplicationValidation();
 builder.AddMongoDb();
 builder.AddCache();
-
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-builder.Services.AddExceptionHandler<
-    GlobalExceptionHandler>();
+builder.Services.AddOpenTelemetry().WithMetrics(builder =>{
+    builder.AddPrometheusExporter();
+    builder.AddMeter([ShortDiagnostic.MeterName]);
+});
 
 
 var app = builder.Build();
@@ -45,6 +48,6 @@ var shortenerGroup = app.MapGroup("/api/v1/shortener")
 shortenerGroup.MapShortenerEndpoints();
 
 app.MapRedirectEndpoints();
-
+app.UseOpenTelemetryPrometheusScrapingEndpoint();
 app.Run();
 

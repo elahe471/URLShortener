@@ -1,5 +1,5 @@
-﻿using Microsoft.Extensions.Caching.Hybrid;
-using Shortener.API.Services.DTOs;
+﻿using System.Diagnostics;
+
 
 namespace Shortener.API.Services;
 
@@ -8,58 +8,104 @@ public sealed class RedirectService(
     TimeProvider timeProvider,
     HybridCache cache,
     IOptions<CacheSettings> cacheSettings,
-    ILogger<RedirectService> logger)
+    ILogger<RedirectService> logger,
+    ShortDiagnostic shortDiagnostic)
     : IRedirectService
 {
     private readonly ShortenerURLContext _context = context;
-    private readonly TimeProvider _timeProvider = timeProvider;
-    private readonly IOptions<CacheSettings> _cacheSettings = cacheSettings;
-    private readonly HybridCache _cache = cache;
-    private readonly ILogger<RedirectService> _logger = logger;
+    private readonly TimeProvider _timeProvider =timeProvider;
+    private readonly HybridCache _cache =cache;
+    private readonly CacheSettings _cacheSettings =cacheSettings.Value;
+    private readonly ILogger<RedirectService> _logger =logger;
+    private readonly ShortDiagnostic _shortDiagnostic =shortDiagnostic;
 
     public async Task<Result<string>> ResolveAsync(string shortCode,CancellationToken cancellationToken)
     {
-        RedirectCacheItem? urlTag;
+        var startedAt =Stopwatch.GetTimestamp();
 
-        if (_cacheSettings.Value.UseCache)
+        var redirectResult = "error";
+
+        try
         {
-            var cacheKey = $"r:{shortCode}";
+            RedirectCacheItem? urlTag;
 
-            urlTag = await _cache.GetOrCreateAsync(
-                cacheKey,
-                async cancel =>
-                {
-                    _logger.LogDebug("Cache miss for {ShortCode}. Reading from MongoDB.",shortCode);
+            if (_cacheSettings.UseCache)
+            {
+                var cacheKey =
+                    $"r:{shortCode}";
 
-                    return await GetFromDatabaseAsync(shortCode,cancel);
-                },
-                cancellationToken: cancellationToken);
+                urlTag =
+                    await _cache.GetOrCreateAsync(
+                        cacheKey,
+                        async cancel =>
+                        {
+                            // HybridCache could not resolve the value
+                            // and must read it from the database.
+                            _shortDiagnostic.CacheDatabaseFallback();
+
+                            _logger.LogDebug("Cache miss for {ShortCode}. Reading from MongoDB.", shortCode);
+
+                            return await GetFromDatabaseAsync(shortCode,cancel);
+                        },
+                        cancellationToken:
+                            cancellationToken);
+            }
+            else
+            {
+                urlTag =await GetFromDatabaseAsync(shortCode,cancellationToken);
+            }
+
+            if (urlTag is null)
+            {
+                redirectResult = "not_found";
+
+                return Result<string>.Failure(
+                    ErrorCodes.UrlNotFound);
+            }
+
+            var now =
+                _timeProvider
+                    .GetUtcNow()
+                    .UtcDateTime;
+
+            if (urlTag.ExpirationDate <= now)
+            {
+                redirectResult = "expired";
+
+                return Result<string>.Failure(
+                    ErrorCodes.UrlExpired);
+            }
+
+            redirectResult = "success";
+
+            return Result<string>.Success(
+                urlTag.DestinationURL);
         }
-        else
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
-            urlTag = await GetFromDatabaseAsync(shortCode,cancellationToken);
-        }
+            redirectResult = "canceled";
 
-        if (urlTag is null)
+            throw;
+        }
+        finally
         {
-            return Result<string>.Failure(ErrorCodes.UrlNotFound);
+            var elapsed =Stopwatch.GetElapsedTime(startedAt);
+            _shortDiagnostic.RedirectCompleted(redirectResult,elapsed.TotalSeconds);
         }
-
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-
-        return urlTag.ExpirationDate <= now ?
-            Result<string>.Failure(ErrorCodes.UrlExpired) : 
-            Result<string>.Success(urlTag.DestinationURL);
     }
 
     private async Task<RedirectCacheItem?> GetFromDatabaseAsync(string shortCode,CancellationToken cancellationToken)
     {
         return await _context.UrlTags
             .AsNoTracking()
-            .Where(x => x.ShortenedCode == shortCode)
-            .Select(x => new RedirectCacheItem(
-                x.DestinationURL,
-                x.ExpirationDate))
-            .FirstOrDefaultAsync(cancellationToken);
+            .Where(x =>
+                x.ShortenedCode == shortCode)
+            .Select(x =>
+                new RedirectCacheItem(
+                    x.DestinationURL,
+                    x.ExpirationDate))
+            .FirstOrDefaultAsync(
+                cancellationToken);
     }
 }

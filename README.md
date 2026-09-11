@@ -1,24 +1,26 @@
 # URL Shortener
 
-A production-oriented URL Shortener API built with **.NET Minimal API**, **MongoDB**, and **HybridCache**.
+A production-oriented URL Shortener API built with **.NET 10**, **MongoDB**, **HybridCache**, and **OpenTelemetry**.
 
-The project is being developed as a practical system-design exercise, with focus on clean architecture, MongoDB concepts, secure short-code generation, centralized error handling, configuration management, caching, and unit testing.
+This project was created as a practical system-design exercise and portfolio project, with focus on backend architecture, MongoDB, deterministic short-code generation, caching, centralized error handling, observability, and automated testing.
 
-## Current Features
+## Features
 
 - Create shortened URLs
 - Redirect short URLs to their original destination
+- Dynamic expiration date provided by the caller
 - URL validation with FluentValidation
-- Expiration support
-- Environment-specific base URLs
 - MongoDB persistence
 - Unique and query indexes
 - Atomic sequence generation with MongoDB
 - Non-sequential, hard-to-guess short codes
-- Hybrid caching with in-memory cache and Redis
+- Hybrid caching with L1 in-memory cache and L2 Redis
 - Configurable cache enable/disable switch
 - Centralized error handling with Problem Details
-- Unit tests for short-code generation
+- OpenTelemetry metrics
+- Prometheus monitoring
+- Grafana visualization
+- Unit tests for short-code generation and expiration validation
 
 ## Tech Stack
 
@@ -28,14 +30,57 @@ The project is being developed as a practical system-design exercise, with focus
 - MongoDB Entity Framework Core Provider
 - MongoDB .NET Driver
 - Microsoft.Extensions.Caching.Hybrid
-- StackExchange.Redis / Distributed Cache
+- StackExchange.Redis
 - FluentValidation
+- OpenTelemetry
+- Prometheus
+- Grafana
 - xUnit
 - FluentAssertions
 - NSubstitute
 - Scalar / OpenAPI
+- Docker
 
-## API Structure
+## Architecture Overview
+
+```text
+Client
+  │
+  ├── POST /api/v1/shortener
+  │       ↓
+  │   ShortenService
+  │       ↓
+  │   Atomic Mongo Sequence
+  │       ↓
+  │   Feistel Permutation
+  │       ↓
+  │   Base62 Encoding
+  │       ↓
+  │   MongoDB
+  │
+  └── GET /{shortCode}
+          ↓
+      HybridCache
+      ├── L1 Memory
+      ├── L2 Redis
+      └── MongoDB fallback
+          ↓
+      Redirect
+```
+
+Observability flow:
+
+```text
+Shortener API
+     ↓
+OpenTelemetry Metrics
+     ↓
+Prometheus
+     ↓
+Grafana
+```
+
+## API
 
 ### Create Short URL
 
@@ -47,7 +92,8 @@ Example request:
 
 ```json
 {
-  "longUrl": "https://example.com/some/very/long/url"
+  "longUrl": "https://example.com/some/very/long/url",
+  "expirationDate": "2026-10-10T18:00:00+02:00"
 }
 ```
 
@@ -56,6 +102,8 @@ Example response:
 ```text
 https://localhost:7261/0aK91PxQz
 ```
+
+The caller defines when the generated short URL should expire.
 
 ### Redirect
 
@@ -69,7 +117,7 @@ Example:
 GET /0aK91PxQz
 ```
 
-If the short code is valid and not expired, the API redirects the client to the stored destination URL.
+If the short code exists and has not expired, the API returns an HTTP redirect to the original URL.
 
 ## MongoDB Model
 
@@ -79,12 +127,12 @@ The main URL document contains data similar to:
 {
   ShortenedCode: "0aK91PxQz",
   DestinationURL: "https://example.com/...",
-  CreatedOn: ISODate("2026-09-08T10:00:00Z"),
-  ExpirationDate: ISODate("2026-10-08T10:00:00Z")
+  CreatedOn: ISODate("2026-09-11T10:00:00Z"),
+  ExpirationDate: ISODate("2026-10-10T16:00:00Z")
 }
 ```
 
-A separate sequence document is used to atomically generate unique numeric IDs.
+A separate sequence document is used to generate unique numeric IDs atomically:
 
 ```javascript
 {
@@ -110,17 +158,13 @@ MongoDB
         └── atomic findOneAndUpdate + $inc
 ```
 
-EF Core is used for regular persistence operations on URL documents.
+EF Core is used for regular URL persistence and queries.
 
-The native MongoDB Driver is used for sequence generation because MongoDB-native atomic operations such as `$inc`, `findOneAndUpdate`, and `upsert` are a better fit for this requirement.
+The native MongoDB Driver is used for sequence generation because MongoDB-native operations such as `$inc`, `findOneAndUpdate`, and `upsert` are a better fit for atomic counter behavior.
 
-`MongoClient` is registered as a Singleton because it is thread-safe and manages its own connection pool internally.
+## Short-Code Generation
 
-`IMongoDatabase` is also registered as a Singleton because it is lightweight, thread-safe, and reuses the shared Mongo client.
-
-## Short Code Generation
-
-The short-code generator does not query MongoDB to check whether a randomly generated value already exists.
+The project does not generate a random code and then query MongoDB to check for collisions.
 
 Instead, the generation pipeline is:
 
@@ -138,11 +182,9 @@ Base62 Encoding
 9-character Short Code
 ```
 
-### Why this design?
+### Atomic Counter
 
-#### Atomic Counter
-
-MongoDB `$inc` provides a unique sequence value atomically.
+MongoDB `$inc` generates unique sequential values atomically:
 
 ```text
 Request A → 1001
@@ -150,35 +192,21 @@ Request B → 1002
 Request C → 1003
 ```
 
-This removes the need for an additional database lookup before every insert.
+### Feistel Permutation
 
-#### Feistel Permutation
+Sequential IDs are predictable, so the numeric sequence is transformed into a keyed permutation.
 
-Sequential IDs are predictable.
+The Feistel round function uses **HMAC-SHA256** with a secret key.
 
-```text
-1001
-1002
-1003
-```
+### Base62
 
-The Feistel network transforms them into a non-sequential permutation while preserving uniqueness.
-
-The round function uses **HMAC-SHA256** with a secret key.
-
-The secret key is not intended to encrypt user data. Its purpose here is to make the sequence-to-short-code mapping difficult to predict externally.
-
-#### Base62
-
-The final numeric value is encoded with:
+The resulting number is encoded using:
 
 ```text
 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 ```
 
-This makes the code compact and URL-safe.
-
-The current short-code length is **9 characters** and the generator operates within a 52-bit space:
+The current short-code length is **9 characters**, operating within a 52-bit sequence space:
 
 ```text
 2^52 - 1
@@ -186,7 +214,7 @@ The current short-code length is **9 characters** and the generator operates wit
 
 ## Database Indexes
 
-The following indexes are currently used:
+Current MongoDB indexes:
 
 ```text
 ShortenedCode
@@ -199,20 +227,11 @@ ExpirationDate
 → Query Index
 ```
 
-The unique index on `ShortenedCode` remains as the final database-level safety guarantee even though the generation algorithm is designed to preserve uniqueness.
+The unique index on `ShortenedCode` remains as the final database-level safety guarantee.
 
 ## Hybrid Cache
 
-The redirect flow uses ASP.NET Core `HybridCache`.
-
-HybridCache combines two cache layers:
-
-```text
-L1 → In-memory cache
-L2 → Redis distributed cache
-```
-
-The lookup flow is:
+Redirect resolution uses ASP.NET Core `HybridCache`.
 
 ```text
 Request
@@ -228,29 +247,19 @@ Populate Redis + Memory
 Return
 ```
 
-This design reduces MongoDB reads for frequently accessed short URLs while keeping redirect resolution fast.
+This reduces MongoDB reads for frequently accessed short URLs.
 
-HybridCache also provides stampede protection for concurrent requests targeting the same cache key within the same application instance. When multiple requests miss the cache at the same time, the underlying factory is coordinated so the database does not need to be queried repeatedly for the same key.
+HybridCache also provides stampede protection for concurrent requests targeting the same cache key within the same application instance.
 
-### Redirect Cache Key
-
-Redirect entries use a short namespace prefix:
+### Cache Key
 
 ```text
 r:{shortCode}
 ```
 
-Example:
+### Cached Data
 
-```text
-r:0aK91PxQz
-```
-
-The prefix helps avoid collisions with other cache entry types if more caching scenarios are added later.
-
-### Redirect Cache Item
-
-Only the fields required for redirect resolution are stored in the cache:
+Only the fields required for redirect resolution are cached:
 
 ```csharp
 public sealed record RedirectCacheItem(
@@ -258,13 +267,11 @@ public sealed record RedirectCacheItem(
     DateTime ExpirationDate);
 ```
 
-This allows the application to validate the URL expiration date even when the result is returned from memory or Redis.
+The URL expiration date is always checked after cache resolution, so an expired link is never redirected even if a cache entry still exists.
 
-### Cache Configuration
+## Cache Configuration
 
-Caching can be enabled or disabled through `CacheSettings`.
-
-Example configuration:
+Example:
 
 ```json
 {
@@ -276,113 +283,22 @@ Example configuration:
 }
 ```
 
-Current cache settings:
+Meaning:
 
 ```text
 UseCache
-→ Enables or disables the cache path.
+→ Enables or disables caching
 
 ExpirationInMinutes
-→ Controls the distributed Redis cache lifetime.
+→ L2 Redis lifetime
 
 LocalCacheExpirationInMinutes
-→ Controls the in-process memory cache lifetime.
-```
-
-Typical flow:
-
-```text
-L1 Memory → 5 minutes
-L2 Redis  → 30 minutes
-```
-
-If caching is disabled, the redirect service reads directly from MongoDB.
-
-```text
-UseCache = false
-        ↓
-MongoDB
-```
-
-### Expiration Safety
-
-The URL's actual `ExpirationDate` is checked after the value is resolved, regardless of whether it came from:
-
-```text
-Memory
-Redis
-MongoDB
-```
-
-This ensures an expired URL is never redirected even if a cache entry still exists.
-
-## Configuration
-
-The project uses ASP.NET Core configuration and the Options pattern for application settings.
-
-### Shortener Settings
-
-```csharp
-IOptions<ShortenerSettings>
-```
-
-Current shortener settings include:
-
-```text
-BaseUrl
-ExpireDateScopeInDays
-SecretKey
-```
-
-### Cache Settings
-
-Cache behavior is configured independently:
-
-```text
-UseCache
-ExpirationInMinutes
-LocalCacheExpirationInMinutes
-```
-
-### Development
-
-Non-sensitive settings can live in:
-
-```text
-appsettings.Development.json
-```
-
-Sensitive values are stored with User Secrets.
-
-Examples:
-
-```text
-ShortenerSettings:SecretKey
-ConnectionStrings:ShortenerURLContext
-ConnectionStrings:Redis
-```
-
-### Production
-
-Environment-specific non-sensitive settings live in:
-
-```text
-appsettings.Production.json
-```
-
-Sensitive values should be supplied through environment variables or a secret store.
-
-Example environment variable format:
-
-```text
-ShortenerSettings__SecretKey
-ConnectionStrings__ShortenerURLContext
-ConnectionStrings__Redis
+→ L1 in-memory lifetime
 ```
 
 ## Error Handling
 
-The API uses centralized error handling based on modern ASP.NET Core primitives:
+The API uses centralized error handling based on:
 
 - `IExceptionHandler`
 - `IProblemDetailsService`
@@ -391,7 +307,7 @@ The API uses centralized error handling based on modern ASP.NET Core primitives:
 - a central error catalog
 - an exception translator
 
-The flow is:
+Flow:
 
 ```text
 Exception
@@ -407,61 +323,7 @@ GlobalExceptionHandler
 ProblemDetails
 ```
 
-Expected business outcomes are not modeled as exceptions.
-
-Examples:
-
-```text
-URL not found
-URL expired
-Validation failure
-```
-
-These are represented using `Result<T>` and stable error codes.
-
-Infrastructure failures such as MongoDB connectivity or persistence failures are handled by the global exception handler.
-
-Example error response:
-
-```json
-{
-  "type": "urn:shortener:error:SHORTENER.URL_EXPIRED",
-  "title": "Short URL expired",
-  "status": 410,
-  "detail": "The requested short URL has expired.",
-  "code": "SHORTENER.URL_EXPIRED",
-  "traceId": "..."
-}
-```
-
-## Redirect Resolution
-
-The redirect query projects only the fields needed for redirect resolution:
-
-```text
-DestinationURL
-ExpirationDate
-```
-
-This avoids loading the entire MongoDB document for every redirect request.
-
-With caching enabled, redirect resolution follows this path:
-
-```text
-Short Code
-    ↓
-HybridCache
-    ↓
-Memory
-    ↓ miss
-Redis
-    ↓ miss
-MongoDB
-    ↓
-Expiration Check
-    ↓
-302 Redirect
-```
+Expected business outcomes are represented with `Result<T>` rather than exceptions.
 
 Current redirect behavior:
 
@@ -469,22 +331,107 @@ Current redirect behavior:
 Invalid short code → 400
 Short code not found → 404
 Expired URL → 410
-Valid URL → 302 Redirect
+Valid URL → 302
 Database unavailable → 503
 Unexpected error → 500
 ```
+
+## Observability
+
+The project uses **OpenTelemetry Metrics** and exposes application metrics to **Prometheus**.
+
+Prometheus stores the time-series data and **Grafana** is used for visualization.
+
+```text
+Shortener API
+     ↓
+OpenTelemetry
+     ↓
+/metrics
+     ↓
+Prometheus
+     ↓
+Grafana
+```
+
+### Current Custom Metrics
+
+```text
+shortener.links.created
+→ Successfully created short URLs
+
+shortener.redirects
+→ Redirect requests grouped by result
+
+shortener.redirect.duration
+→ Redirect resolution duration
+
+shortener.cache.database_fallback
+→ Cache lookups that required MongoDB
+```
+
+Redirect result labels currently include:
+
+```text
+success
+expired
+not_found
+error
+canceled
+```
+
+The project intentionally avoids using `shortCode` as a Prometheus label to prevent high-cardinality metrics.
+
+## Prometheus
+
+Prometheus runs as shared Docker infrastructure and can monitor multiple applications.
+
+Example target:
+
+```text
+host.docker.internal:5180
+```
+
+Prometheus scrapes:
+
+```text
+/metrics
+```
+
+Example monitoring architecture:
+
+```text
+Shortener API ──────┐
+Catalog API ────────┤
+Media API ──────────┼──→ Prometheus
+Future Services ────┘
+```
+
+## Grafana
+
+Grafana runs in Docker and uses Prometheus as its data source:
+
+```text
+http://prometheus:9090
+```
+
+Current experiments include visualizing:
+
+- total created links
+- redirect counts
+- redirect results
+- redirect duration
+- database fallback metrics
 
 ## Time Handling
 
 The application uses `TimeProvider` instead of directly depending on `DateTime.UtcNow`.
 
-This improves testability, especially for expiration-related behavior.
-
 ```csharp
 TimeProvider.System
 ```
 
-is registered in DI for normal application use.
+This improves testability, especially for expiration-related behavior.
 
 ## Unit Tests
 
@@ -495,29 +442,29 @@ Tests/
 └── Shortener.UnitTests/
 ```
 
-Current tests focus on `ShortCodeGenerator`.
+### ShortCodeGenerator Tests
 
-They verify:
+Current tests verify:
 
 - output length is 9 characters
 - output contains only Base62 characters
-- the same sequence produces the same short code
-- different sequences produce different short codes
+- the same sequence produces the same code
+- different sequences produce different codes
 - invalid sequences are rejected
 - the maximum supported sequence succeeds
-- values beyond the 52-bit range fail
-- a large range of sequential inputs produces no duplicates
+- values outside the 52-bit range fail
+- a large range of sequential values produces no duplicates
 
-Example test naming convention:
+### Expiration Validation Tests
+
+Expiration validation is tested using `FakeTimeProvider`.
+
+The tests cover:
 
 ```text
-MethodName_Scenario_ExpectedResult
-```
-
-Example:
-
-```csharp
-Generate_WithInvalidSequence_ShouldThrow()
+Future expiration → Valid
+Past expiration → Invalid
+Expiration equal to current time → Invalid
 ```
 
 The tests follow the AAA pattern:
@@ -532,69 +479,74 @@ Assert
 
 Pure application logic is covered by Unit Tests.
 
-MongoDB atomic behavior should be covered by Integration Tests rather than mocked Unit Tests.
+MongoDB atomic behavior is better suited to Integration Tests than mocked Unit Tests.
 
-Planned MongoDB integration test:
+Planned integration test:
 
 ```text
 100 concurrent requests
         ↓
 MongoDB atomic $inc
         ↓
-100 different sequence values
+100 unique sequence values
 ```
 
-A future integration-test project can use a real MongoDB container through Testcontainers.
+A future integration-test project can use MongoDB through Testcontainers.
 
-### HybridCache Verification
+## Configuration
 
-The current HybridCache flow has been manually verified for the main cache paths:
+Sensitive values are not stored in source control.
+
+### Development
+
+User Secrets are used for values such as:
 
 ```text
-Cold Cache
-→ Memory miss
-→ Redis miss
-→ MongoDB
-
-Second Request
-→ Memory hit
-
-Application Restart
-→ Memory cleared
-→ Redis hit
-
-UseCache = false
-→ MongoDB directly
+ShortenerSettings:SecretKey
+ConnectionStrings:ShortenerURLContext
+ConnectionStrings:Redis
 ```
 
-This confirms the intended L1/L2/fallback behavior of the redirect path.
+### Production
+
+Sensitive values should be supplied through environment variables or an external secret store.
+
+Example:
+
+```text
+ShortenerSettings__SecretKey
+ConnectionStrings__ShortenerURLContext
+ConnectionStrings__Redis
+```
 
 ## Current Project Direction
 
-The project is intentionally being kept simple at the API level while exploring deeper system-design concepts where they provide real value.
-
-Current focus areas include:
+The project currently demonstrates:
 
 ```text
-URL validation
+.NET Minimal APIs
 MongoDB
 Atomic ID generation
 Feistel permutation
 Base62 encoding
-Centralized error handling
-Environment configuration
 Hybrid caching
+Redis
+Centralized error handling
+OpenTelemetry
+Prometheus
+Grafana
 Unit testing
 ```
 
 Future areas may include:
 
 - integration tests with MongoDB
-- integration tests for cache behavior
+- cache integration tests
 - redirect analytics
 - click tracking
 - rate limiting
-- cache invalidation strategy
+- distributed tracing
+- structured logging
+- OpenTelemetry Collector
+- Grafana Tempo / Loki
 - cleanup of expired URLs
-- distributed ID-generation strategies
-- observability and metrics

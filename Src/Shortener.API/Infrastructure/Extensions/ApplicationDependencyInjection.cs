@@ -1,4 +1,5 @@
 ﻿using Shortener.API.Infrastructure.Configurations;
+using Shortener.API.Observability;
 
 namespace Shortener.API.Infrastructure.Extensions
 {
@@ -39,6 +40,7 @@ namespace Shortener.API.Infrastructure.Extensions
             //instead of using DateTime.Now, we can use TimeProvider.System to get the current time, this will make it easier to test the code in the future
             builder.Services.AddSingleton(TimeProvider.System);
             builder.Services.AddSingleton<ErrorTranslator>();
+            builder.Services.AddSingleton<ShortDiagnostic>();
 
         }
     }

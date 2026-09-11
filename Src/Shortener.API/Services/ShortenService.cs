@@ -1,33 +1,33 @@
-﻿namespace Shortener.API.Services;
+﻿
+
+namespace Shortener.API.Services;
 
 public sealed class ShortenService(
     ShortenerURLContext context,
     ISequenceGenerator sequenceGenerator,
     IShortCodeGenerator shortCodeGenerator,
     IOptions<ShortenerSettings> options,
+    ShortDiagnostic shortDiagnostic,
     TimeProvider timeProvider)
     : IShortenService
 {
     private readonly ShortenerURLContext _context = context;
     private readonly ISequenceGenerator _sequenceGenerator = sequenceGenerator;
-    private readonly IShortCodeGenerator _shortCodeGenerator = shortCodeGenerator;
-    private readonly ShortenerSettings _settings = options.Value;
-    private readonly TimeProvider _timeProvider = timeProvider;
+    private readonly IShortCodeGenerator _shortCodeGenerator =shortCodeGenerator;
+    private readonly ShortenerSettings _settings =options.Value;
+    private readonly ShortDiagnostic _shortDiagnostic = shortDiagnostic;
+    private readonly TimeProvider _timeProvider =timeProvider;
 
     public async Task<string> ShortenUrlAsync(
-      string longUrl,
-      DateTimeOffset expirationDate,
-      CancellationToken cancellationToken)
+        string longUrl,
+        DateTimeOffset expirationDate,
+        CancellationToken cancellationToken)
     {
-        var sequence =
-            await _sequenceGenerator.GetNextAsync(
-                cancellationToken);
+        var sequence =await _sequenceGenerator.GetNextAsync(cancellationToken);
 
-        var shortenedCode =
-            _shortCodeGenerator.Generate(sequence);
+        var shortenedCode =_shortCodeGenerator.Generate(sequence);
 
-        var now =
-            _timeProvider.GetUtcNow().UtcDateTime;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var urlTag = new UrlTag
         {
@@ -39,15 +39,16 @@ public sealed class ShortenService(
 
         _context.UrlTags.Add(urlTag);
 
-        await _context.SaveChangesAsync(
-            cancellationToken);
+        await _context.SaveChangesAsync( cancellationToken);
+
+        // Count only successfully created short URLs.
+        _shortDiagnostic.LinkCreated();
 
         return GetShortenedUrl(shortenedCode);
     }
 
-    private string GetShortenedUrl(
-        string shortenedCode)
+    private string GetShortenedUrl(string shortenedCode)
     {
-        return $"{_settings.BaseUrl.TrimEnd('/')}/{shortenedCode}";
+        return$"{_settings.BaseUrl.TrimEnd('/')}/{shortenedCode}";
     }
 }

@@ -10,6 +10,8 @@ global using Shortener.API.Infrastructure.Configurations;
 global using Shortener.API.Errors;
 global using Shortener.API.Exceptions;
 global using Shortener.API.Errors.CustomModel;
+global using Shortener.API.Observability;
+global using Shortener.API.Services.DTOs;
 
 
 //Nuget Packages
@@ -26,4 +28,5 @@ global using System.Security.Cryptography;
 global using System.Collections.Frozen;
 global using Microsoft.AspNetCore.Diagnostics;
 global using Microsoft.AspNetCore.Mvc;
-global using Microsoft.Extensions.Caching.Distributed; 
+global using OpenTelemetry.Metrics;
+global using Microsoft.Extensions.Caching.Hybrid;
