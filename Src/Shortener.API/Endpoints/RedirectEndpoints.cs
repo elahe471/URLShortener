@@ -6,7 +6,7 @@ public static class RedirectEndpoints
     public static IEndpointRouteBuilder MapRedirectEndpoints(
         this IEndpointRouteBuilder app)
     {
-        app.MapGet("/{shortCode:length(9)}", RedirectToLongUrl);
+        app.MapGet("/{shortCode}", RedirectToLongUrl);
 
         return app;
     }
@@ -44,6 +44,6 @@ public static class RedirectEndpoints
     private static bool IsValidShortCode(string shortCode)
     {
         return shortCode.Length == 9 &&
-               shortCode.All(char.IsLetterOrDigit);
+               shortCode.All(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z' or >= 'a' and <= 'z');
     }
 }

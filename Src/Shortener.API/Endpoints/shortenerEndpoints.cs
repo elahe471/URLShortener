@@ -20,10 +20,7 @@ public static class ShortenerEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var validationResult =
-            await validator.ValidateAsync(
-                request,
-                cancellationToken);
+        var validationResult =await validator.ValidateAsync(request,cancellationToken);
 
         if (!validationResult.IsValid)
         {
@@ -33,17 +30,10 @@ public static class ShortenerEndpoints
                     x => x.Key,
                     x => x.Select(e => e.ErrorMessage).ToArray());
 
-            return errorTranslator.ToResult(
-                ErrorCodes.ValidationFailed,
-                httpContext,
-                new Dictionary<string, object?>
-                {
-                    ["errors"] = errors
-                });
+            return errorTranslator.ToValidationResult(errors, httpContext);
         }
 
-        var shortUrl =
-      await shortenService.ShortenUrlAsync(
+        var shortUrl = await shortenService.ShortenUrlAsync(
           request.LongUrl,
           request.ExpirationDate,
           cancellationToken);

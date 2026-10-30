@@ -1,46 +1,42 @@
-﻿using Microsoft.Extensions.Caching.Hybrid;
+using ZiggyCreatures.Caching.Fusion.Serialization.SystemTextJson;
 
-namespace Shortener.API.Infrastructure.Extensions
+namespace Shortener.API.Infrastructure.Extensions;
+
+public static class CacheDependencyInjection
 {
-    public static class CacheDependencyInjection
+    public static void AddCache(this IHostApplicationBuilder builder)
     {
-        public static void AddCache(this IHostApplicationBuilder builder)
+        var cacheSettings = builder.Configuration.GetSection(CacheSettings.SectionName).Get<CacheSettings>()
+            ?? throw new InvalidOperationException("Cache configuration is missing.");
+
+        var fusionCache = builder.Services.AddFusionCache()
+            .WithDefaultEntryOptions(options =>
+            {
+                options.Duration = TimeSpan.FromMinutes(cacheSettings.LocalCacheExpirationInMinutes);
+                options.DistributedCacheDuration = TimeSpan.FromMinutes(cacheSettings.ExpirationInMinutes);
+                options.IsFailSafeEnabled = false;
+                // Keep factory work inside the request scope that owns the DbContext.
+                options.AllowTimedOutFactoryBackgroundCompletion = false;
+                options.AllowBackgroundDistributedCacheOperations = false;
+            });
+
+        if (cacheSettings.UseCache)
         {
-            var connectionString =
-           builder.Configuration.GetConnectionString("Redis")
-           ?? throw new InvalidOperationException(
-               "Redis connection string is not configured.");
-
-
+            var connectionString = builder.Configuration.GetConnectionString("Redis");
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new InvalidOperationException("Redis connection string is not configured.");
 
             builder.Services.AddStackExchangeRedisCache(options =>
             {
-                options.Configuration =connectionString;
+                options.Configuration = connectionString;
                 options.InstanceName = "Shortener:";
             });
-            var hybridCacheSettings =
-    builder.Configuration
-        .GetSection(CacheSettings.SectionName)
-        .Get<CacheSettings>()
-    ?? throw new InvalidOperationException(
-        "HybridCache configuration is missing.");
 
-
-            builder.Services.AddHybridCache(options =>
-            {
-                options.DefaultEntryOptions =
-                    new HybridCacheEntryOptions
-                    {
-                        Expiration = TimeSpan.FromMinutes(
-                            hybridCacheSettings.ExpirationInMinutes),
-
-                        LocalCacheExpiration = TimeSpan.FromMinutes(
-                            hybridCacheSettings.LocalCacheExpirationInMinutes)
-                    };
-            });
-
-            builder.Services.AddOptions<CacheSettings>().Bind(builder.Configuration.GetSection(CacheSettings.SectionName));
-
+            fusionCache.WithSerializer(new FusionCacheSystemTextJsonSerializer())
+                .WithRegisteredDistributedCache();
         }
+
+        builder.Services.AddOptions<CacheSettings>()
+            .Bind(builder.Configuration.GetSection(CacheSettings.SectionName));
     }
 }

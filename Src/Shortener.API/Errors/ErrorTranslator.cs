@@ -1,5 +1,12 @@
-﻿public sealed class ErrorTranslator
+public sealed class ErrorTranslator
 {
+    public IResult ToValidationResult(IDictionary<string, string[]> errors, HttpContext httpContext)
+    {
+        var problem = Translate(ErrorCodes.ValidationFailed, httpContext);
+        return TypedResults.ValidationProblem(errors, detail: problem.Detail,
+            title: problem.Title, type: problem.Type, extensions: problem.Extensions);
+    }
+
     public ProblemDetails Translate(
         string errorCode,
         HttpContext httpContext,

@@ -29,4 +29,4 @@ global using System.Collections.Frozen;
 global using Microsoft.AspNetCore.Diagnostics;
 global using Microsoft.AspNetCore.Mvc;
 global using OpenTelemetry.Metrics;
-global using Microsoft.Extensions.Caching.Hybrid;
+global using ZiggyCreatures.Caching.Fusion;

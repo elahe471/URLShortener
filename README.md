@@ -1,8 +1,12 @@
 # URL Shortener
 
-A production-oriented URL Shortener API built with **.NET 10**, **MongoDB**, **HybridCache**, and **OpenTelemetry**.
+A production-oriented URL Shortener API built with **.NET 10**, **MongoDB**, **FusionCache**, and **OpenTelemetry**.
 
 This project was created as a practical system-design exercise and portfolio project, with focus on backend architecture, MongoDB, deterministic short-code generation, caching, centralized error handling, observability, and automated testing.
+
+## Technical Documentation
+
+For implementation details and a guided code walkthrough, see the [technical documentation](docs/technical/README.md). It covers architecture, API contracts, code generation, persistence, caching, configuration, observability, and testing.
 
 ## Features
 
@@ -14,7 +18,7 @@ This project was created as a practical system-design exercise and portfolio pro
 - Unique and query indexes
 - Atomic sequence generation with MongoDB
 - Non-sequential, hard-to-guess short codes
-- Hybrid caching with L1 in-memory cache and L2 Redis
+- FusionCache with L1 in-memory cache and L2 Redis
 - Configurable cache enable/disable switch
 - Centralized error handling with Problem Details
 - OpenTelemetry metrics
@@ -29,7 +33,8 @@ This project was created as a practical system-design exercise and portfolio pro
 - MongoDB
 - MongoDB Entity Framework Core Provider
 - MongoDB .NET Driver
-- Microsoft.Extensions.Caching.Hybrid
+- ZiggyCreatures.FusionCache
+- ZiggyCreatures.FusionCache.Serialization.SystemTextJson
 - StackExchange.Redis
 - FluentValidation
 - OpenTelemetry
@@ -60,7 +65,7 @@ Client
   │
   └── GET /{shortCode}
           ↓
-      HybridCache
+      FusionCache
       ├── L1 Memory
       ├── L2 Redis
       └── MongoDB fallback
@@ -229,9 +234,9 @@ ExpirationDate
 
 The unique index on `ShortenedCode` remains as the final database-level safety guarantee.
 
-## Hybrid Cache
+## FusionCache
 
-Redirect resolution uses ASP.NET Core `HybridCache`.
+Redirect resolution uses `FusionCache`.
 
 ```text
 Request
@@ -249,7 +254,7 @@ Return
 
 This reduces MongoDB reads for frequently accessed short URLs.
 
-HybridCache also provides stampede protection for concurrent requests targeting the same cache key within the same application instance.
+FusionCache also provides stampede protection for concurrent requests targeting the same cache key within the same application instance.
 
 ### Cache Key
 
@@ -275,7 +280,7 @@ Example:
 
 ```json
 {
-  "Cache": {
+  "CacheSettings": {
     "UseCache": true,
     "ExpirationInMinutes": 30,
     "LocalCacheExpirationInMinutes": 5
@@ -560,7 +565,7 @@ MongoDB
 Atomic ID generation
 Feistel permutation
 Base62 encoding
-Hybrid caching
+FusionCache caching
 Redis
 Centralized error handling
 OpenTelemetry

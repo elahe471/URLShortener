@@ -6,7 +6,7 @@ namespace Shortener.API.Services;
 public sealed class RedirectService(
     ShortenerURLContext context,
     TimeProvider timeProvider,
-    HybridCache cache,
+    IFusionCache cache,
     IOptions<CacheSettings> cacheSettings,
     ILogger<RedirectService> logger,
     ShortDiagnostic shortDiagnostic)
@@ -14,7 +14,7 @@ public sealed class RedirectService(
 {
     private readonly ShortenerURLContext _context = context;
     private readonly TimeProvider _timeProvider =timeProvider;
-    private readonly HybridCache _cache =cache;
+    private readonly IFusionCache _cache =cache;
     private readonly CacheSettings _cacheSettings =cacheSettings.Value;
     private readonly ILogger<RedirectService> _logger =logger;
     private readonly ShortDiagnostic _shortDiagnostic =shortDiagnostic;
@@ -35,11 +35,11 @@ public sealed class RedirectService(
                     $"r:{shortCode}";
 
                 urlTag =
-                    await _cache.GetOrCreateAsync(
+                    await _cache.GetOrSetAsync<RedirectCacheItem?>(
                         cacheKey,
-                        async cancel =>
+                        async (_, cancel) =>
                         {
-                            // HybridCache could not resolve the value
+                            // FusionCache could not resolve the value
                             // and must read it from the database.
                             _shortDiagnostic.CacheDatabaseFallback();
 
@@ -47,7 +47,7 @@ public sealed class RedirectService(
 
                             return await GetFromDatabaseAsync(shortCode,cancel);
                         },
-                        cancellationToken:
+                        token:
                             cancellationToken);
             }
             else

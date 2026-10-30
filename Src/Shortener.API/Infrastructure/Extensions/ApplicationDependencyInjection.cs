@@ -8,13 +8,16 @@ namespace Shortener.API.Infrastructure.Extensions
         public static void AddApplicationServices(this IHostApplicationBuilder builder)
         {
 
-            builder.Services
-        .AddOptions<ShortenerSettings>()
-        .Bind(builder.Configuration.GetSection(
-            ShortenerSettings.SectionName))
-        .Validate(
-            x => !string.IsNullOrWhiteSpace(x.SecretKey),
-            "SecretKey is required.")
+            builder.Services.AddOptions<ShortenerSettings>()
+        .Bind(builder.Configuration.GetSection(ShortenerSettings.SectionName))
+        .Validate(x => Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && !string.IsNullOrWhiteSpace(uri.Host)
+            && string.IsNullOrEmpty(uri.Query)
+            && string.IsNullOrEmpty(uri.Fragment)
+            && string.IsNullOrEmpty(uri.UserInfo),
+            "BaseUrl must be an absolute HTTP or HTTPS URL without credentials, query, or fragment.")
+        .Validate(x => !string.IsNullOrWhiteSpace(x.SecretKey), "SecretKey is required.")
         .Validate(
             x =>
             {
@@ -32,7 +35,7 @@ namespace Shortener.API.Infrastructure.Extensions
             "SecretKey must be a valid Base64 value containing at least 32 bytes.")
         .ValidateOnStart();
 
-           
+
 
             builder.Services.AddScoped<IShortenService, ShortenService>();
             builder.Services.AddScoped<IRedirectService, RedirectService>();

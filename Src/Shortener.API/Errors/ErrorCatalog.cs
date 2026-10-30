@@ -39,6 +39,12 @@ public static class ErrorCatalog
                 "The database is temporarily unavailable.",
                 StatusCodes.Status503ServiceUnavailable),
 
+            [ErrorCodes.DatabaseTimeout] = new(
+                ErrorCodes.DatabaseTimeout,
+                "Service unavailable",
+                "The database operation timed out. Please try again later.",
+                StatusCodes.Status503ServiceUnavailable),
+
             [ErrorCodes.Unexpected] = new(
                 ErrorCodes.Unexpected,
                 "Internal server error",
